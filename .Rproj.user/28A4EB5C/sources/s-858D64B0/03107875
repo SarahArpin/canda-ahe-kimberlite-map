@@ -1,0 +1,28 @@
+{
+    "id": "03107875",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1635782028850.0,
+    "source_on_save": false,
+    "relative_order": 13,
+    "properties": {
+        "id": "bb25e8ec0c1e450484bd74cc14b6c09f",
+        "name": "sf_pipes",
+        "title": "sf_pipes",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 68719476788,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1635782028850,
+    "read_only": false,
+    "read_only_alternatives": []
+}
