@@ -80,22 +80,30 @@ map_colors <- RColorBrewer::brewer.pal(9, "Pastel1") %>% rep(37) # 4
 # 		  legend.key = element_rect(color = "gray40", size = 0.1))
 ```
 
+```{r}
+canada_cd2 <- as.location("https://raw.githubusercontent.com/fifty8/canada-maps-r/main/data/canada_cd_sim.geojson")
+canada_cd2 <- geojson_read(canada_cd2)
+canada_cd2_sim <- geojson_read("https://raw.githubusercontent.com/fifty8/canada-maps-r/main/data/canada_cd_sim.geojson", what = "sp")
+canada_cd2 <- st_read(canada_cd2_sim)
+```
 
 # Plotting Canada
 ```{r}
-canada_cd <- st_read("data/canada_cd_sim.geojson", quiet = TRUE) # 1
-crs_string = "+proj=lcc +lat_1=49 +lat_2=77 +lon_0=-91.52 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs" # 2
-
+canada_cd <- st_read("data/canada_cd_sim2.geojson", quiet = TRUE) # 1
+crs_string <- "+proj=lcc +lat_1=49 +lat_2=77 +lon_0=-91.52 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs" # 2
+#crs_string2 <- "+proj=lcc +lat_1=77 +lat_2=49 +lat_0=49 +lon_0=-95 +x_0=0 +y_0=0 +ellps=GRS80 +units=m +no_defs"
 
 #Transform from WGS84 to Lambert Conformal Conic projection
-st_crs(canada_cd) <- crs_string
-canada_cd <- st_transform(canada_cd, crs_string)
+#st_crs(canada_cd) <- crs_string
+#canada_cd <- st_transform(canada_cd, crs_string)
 
 # Plot the maps
 ggplot() +
 	geom_sf(data = canada_cd, aes(fill = PRUID), color = "gray60", size = 0.1) + # 5
+ 
   #coord_sf(datum = st_crs(crs_string)) +   
-	coord_sf(default_crs = NULL) +
+	#coord_sf(default_crs = NULL) +
+  coord_sf(crs = crs_string, lims_method = "geometry_bbox") +  
 	scale_fill_manual(values = map_colors) +
 	guides(fill = "none") +
 	theme_bw() 
@@ -105,17 +113,14 @@ ggplot() +
 ```{r}
 pipe_coords <- readxl::read_excel("data/kimberlite_coords.xlsx")
 
-sf_pipes <- pipe_coords %>%
-  st_as_sf(coords = c("long", "lat"), crs=4326)
-
 sf_pipes = pipe_coords %>%
 	select(long, lat) %>% # 1
 	as.matrix() %>% # 2
 	st_multipoint(dim = 'XY') %>% # 3
 	st_sfc() %>% # 4
-	st_set_crs(4269) # 5
+	st_set_crs(4326) # 5
 
-sf_pipes_t <- st_transform(sf_pipes, crs_string)
+sf_pipes_t <- st_transform(sf_pipes, crs_string2)
 ```
 
 
@@ -128,9 +133,10 @@ ggplot() +
 	#coord_sf(default_crs = NULL) +
 	scale_fill_manual(values = map_colors) +
 	guides(fill = "none") +
-	theme_map() +
-	theme(panel.grid.major = element_line(color = "white"),
-		  legend.key = element_rect(color = "gray40", size = 0.1))
+  theme_bw()
+	#theme_map() +
+	#theme(panel.grid.major = element_line(color = "white"),
+		  #legend.key = element_rect(color = "gray40", size = 0.1))
 ```
 
 
