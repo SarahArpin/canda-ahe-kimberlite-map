@@ -1,0 +1,186 @@
+---
+title: "Canada Basemap"
+subtitle: "SUBTITLE"
+author: "Spencer Zeigler"
+date: "Last knitted `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  html_document: 
+    df_print: paged
+    number_sections: yes
+    toc: yes
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+editor_options:
+  chunk_output_type: console # switch to 'inline' if preferred
+---
+
+# Setup
+
+```{r "setup", message = FALSE}
+# packages
+library(sf) # the base package manipulating shapes
+library(rgdal) # geo data abstraction library
+library(geojsonio) # geo json input and output
+library(spdplyr) # the `dplyr` counterpart for shapes
+library(rmapshaper) # the package that allows geo shape transformation
+library(magrittr) # data wrangling
+library(dplyr)
+library(tidyr)
+library(ggplot2) # general data wrangling and plotting
+library(sp)
+
+# global knitting options for code rendering
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  dev = c("png", "pdf"),
+  dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
+  fig.keep = "all",
+  fig.path = file.path("plots", paste0(gsub("\\.[Rr]md", "", knitr::current_input()), "_"))
+)
+
+
+## SOURCES
+https://tengl.net/blog/2020/1/7/drawing-canada-maps-in-r
+https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+```
+
+# Convert from .shp to geojson
+```{r}
+#canada_raw = readOGR(dsn = "data", layer = "canada_basemap", encoding = 'latin1') # 1
+#canada_raw_json <- geojson_json(canada_raw) # 2
+#canada_raw_sim <- ms_simplify(canada_raw_json) # 3
+#geojson_write(canada_raw_sim, file = "data/canada_cd_sim.geojson") # 4
+```
+
+#Convert crop from .shp too geojson
+```{r}
+crop_raw = readOGR(dsn = "data", layer = "CanadaCrop", encoding = 'latin1') # 1
+crop_raw_json <- geojson_json(crop_raw) # 2
+#crop_raw_sim <- ms_simplify(crop_raw_json) # 3
+geojson_write(crop_raw_json, file = "data/crop_cd_sim.geojson") # 4
+```
+
+# Aesthetics 
+```{r}
+# Define the maps' theme -- remove axes, ticks, borders, legends, etc.
+theme_map <- function(base_size=9, base_family="") { # 3
+	require(grid)
+	theme_bw(base_size=base_size, base_family=base_family) %+replace%
+		theme(axis.line=element_blank(),
+			  axis.text=element_blank(),
+			  axis.ticks=element_blank(),
+			  axis.title=element_blank(),
+			  panel.background=element_blank(),
+			  panel.border=element_blank(),
+			  panel.grid=element_blank(),
+			  panel.spacing=unit(0, "lines"),
+			  plot.background=element_blank(),
+			  legend.justification = c(0,0),
+			  legend.position = c(0,0)
+		)
+}
+
+# Define the filling colors for each province; max allowed is 9 but good enough for the 13 provinces + territories
+map_colors <- RColorBrewer::brewer.pal(9, "Pastel1") %>% rep(37) # 4
+
+
+#add to plot
+# theme_map() + 
+#   	theme(panel.grid.major = element_line(color = "white"),
+# 		  legend.key = element_rect(color = "gray40", size = 0.1))
+```
+
+# Plotting Canada
+```{r}
+canada_cd <- st_read("data/canada_cd_sim.geojson", quiet = TRUE) # 1
+
+crs_string <- "+proj=lcc +lat_1=49 +lat_2=77 +lon_0=-91.52 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs" # 2
+crs_string_qgis <- "+proj=lcc +lat_1=49 +lat_2=77 +lat_0=63.390675 +lon_0=-91.86666666666666 +x_0=6200000 +y_0=3000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_def" #could try using this and seeing what it does
+
+# Plot the maps
+ggplot() +
+  geom_sf(data = crop_cd, color = "gray60", size = 0.1) + # 5
+	#geom_sf(data = crop_cd, aes(fill = PRUID), color = "gray60", size = 0.1) + # 5
+  coord_sf(crs = crs_string_qgis) + # 6
+	scale_fill_manual(values = map_colors) +
+	guides(fill = "none") 
+	#theme_map() + 
+  #theme(legend.key = element_rect(color = "gray40", size = 0.1))
+```
+
+# Trying to figure out how to crop the map. 
+```{r}
+# QGIS plots my Canada data in NAD83/ Statistics Canada Lambert EPSG: 3357
+#st_set_crs(canada_cd, 3347)
+
+#Create bbox object to use with st_crop(). Using Charlotte's CanadaCrop. Mine is more wrong than hers. When I plot mine I get latitudes of 12-16N and longitudes of 50-56W. At least hers are 85-105W and 26-34N????
+
+crop_cd <- st_read("data/crop_cd_sim.geojson", quiet = TRUE) # read in crop rectangle
+st_crs(crop_cd) # check what crs it is in
+st_crs(crop_cd) <- crs_string_qgis # use this line only if the geometry go to 0 after using st_transform
+crop_cd <- st_transform(crop_cd, crs_string_qgis) # change crs 
+st_crs(crop_cd) #check that it is the right projection now
+
+
+bbox <- st_bbox(crop_cd[[2]][[1]]) # turn xmin,xmax,ymin,ymax from crop into bbox
+bbox <- st_set_crs(bbox, crs_string_qgis) # set crs of bbox 
+st_crs(bbox) # check that the crs set, it did, good job. 
+
+canada_cd_t <- st_transform(canada_cd, crs_string_qgis) #create map of canada that has correct crs
+st_crs(canada_cd_t) # check that is has the right crs, it does, good job v2. 
+
+st_is_valid(canada_cd_t)
+canada_cd_t <- st_make_valid(canada_cd_t) #it had some FALSE's in there before. So I fix it. 
+
+
+st_crop(canada_cd_t, c(-1585578.9, 4009743.7, 724394.2, 5221468.4))
+
+
+
+#c(-1585578.9, 4009743.7, 724394.2, 5221468.4)
+```
+
+# If all that ^ shit fails, here is a filtered dataset of the two provinces you give a shit about. :) 
+```{r}
+nwt_cd <- canada_cd_t %>%
+  filter(PRNAME == "Northwest Territories / Territoires du Nord-Ouest" | PRNAME == "Nunavut") #%>% filter(!CDNAME == "Baffin")
+```
+
+# Kimberlite Data
+```{r}
+pipe_coords <- readxl::read_excel("data/kimberlite_coords.xlsx") %>%
+  drop_na(long)
+
+#ONE big problem: 
+## I need to crop my map. I just have to. I need to be able to focus in on an area. 
+
+(sf_pipes <- st_as_sf(pipe_coords, coords = c("long", "lat"), remove = FALSE, 
+    crs = 4269, agr = "constant"))
+```
+
+#Plot with Kimberlite Data
+```{r}
+ggplot() +
+  geom_sf(data = sf_pipes, aes(color = age_Ma), alpha = 1, size = 1) + # 17
+	geom_sf(data = nwt_cd, aes(fill = PRUID), color = "gray60", size = 0.1, alpha = 0.3) +
+
+	coord_sf(default_crs = NULL) +
+	scale_fill_manual(values = map_colors) +
+	guides(fill = "none") +
+  theme_map() + 
+  theme(panel.grid.major = element_line(color = "white"),
+  legend.key = element_rect(color = "gray40", size = 0.1))
+```
+
+
+
+
+
+
+
+
+
+
+
+
