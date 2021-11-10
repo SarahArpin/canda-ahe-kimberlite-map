@@ -1,0 +1,27 @@
+{
+    "id": "F11845D3",
+    "path": "~/Documents/Flowers Lab/Arctic Kimberlite/canda-ahe-kimberlite-map/canada_basemap.Rmd",
+    "project_path": "canada_basemap.Rmd",
+    "type": "r_markdown",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1635452765015.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "chunk_output_type": "console # switch to 'inline' if preferred",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "170,0",
+        "scrollLine": "148"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1636556564,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1636556564083,
+    "read_only": false,
+    "read_only_alternatives": []
+}

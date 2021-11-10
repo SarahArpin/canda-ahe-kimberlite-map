@@ -1,0 +1,173 @@
+---
+title: "Canada Basemap"
+subtitle: "SUBTITLE"
+author: "Spencer Zeigler"
+date: "Last knitted `r format(Sys.Date(), '%d %b %Y')`"
+output:
+  html_document: 
+    df_print: paged
+    number_sections: yes
+    toc: yes
+    toc_float: true
+    toc_depth: 3
+    code_folding: show
+editor_options:
+  chunk_output_type: console # switch to 'inline' if preferred
+---
+
+# Setup
+
+```{r "setup", message = FALSE}
+# packages
+library(sf) # the base package manipulating shapes
+library(rgdal) # geo data abstraction library
+library(geojsonio) # geo json input and output
+library(spdplyr) # the `dplyr` counterpart for shapes
+library(rmapshaper) # the package that allows geo shape transformation
+library(magrittr) # data wrangling
+library(dplyr)
+library(tidyr)
+library(ggplot2) # general data wrangling and plotting
+library(sp)
+
+# global knitting options for code rendering
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  dev = c("png", "pdf"),
+  dev.args = list(pdf = list(encoding = "WinAnsi", useDingbats = FALSE)),
+  fig.keep = "all",
+  fig.path = file.path("plots", paste0(gsub("\\.[Rr]md", "", knitr::current_input()), "_"))
+)
+```
+
+## SOURCES
+https://tengl.net/blog/2020/1/7/drawing-canada-maps-in-r
+https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+
+# Convert map of Canada from .shp to geojson
+```{r}
+#canada_raw = readOGR(dsn = "data", layer = "canada_basemap", encoding = 'latin1') # 1
+#canada_raw_json <- geojson_json(canada_raw) # 2
+#canada_raw_sim <- ms_simplify(canada_raw_json) # 3
+#geojson_write(canada_raw_sim, file = "data/canada_cd_sim.geojson") # 4
+```
+
+#Convert shapefile with approximate crop shape from .shp to geojson
+```{r}
+# crop_raw = readOGR(dsn = "data", layer = "CanadaCrop", encoding = 'latin1') 
+# crop_raw_json <- geojson_json(crop_raw) 
+# geojson_write(crop_raw_json, file = "data/crop_cd_sim.geojson") 
+```
+
+# load CRS; read in map and shapefile (as geojson); transform map to correc CRS
+```{r}
+crs_string <- "+proj=lcc +lat_1=49 +lat_2=77 +lon_0=-91.52 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs" # 2
+
+canada_cd <- st_read("data/canada_cd_sim.geojson", quiet = TRUE) # canada
+canada_cd_t <- st_transform(canada_cd, crs_string) # canada with transformed to correct crs
+
+crop_cd <- st_read("data/crop_cd_sim.geojson", quiet = TRUE) # crop rectangle
+
+st_crs(canada_cd_t) # check crs
+#st_crs(crop_cd) <- crs_string # use this line only if the geometry go to 0 after using st_transform
+```
+
+
+# Aesthetics 
+```{r}
+# Define the maps' theme -- remove axes, ticks, borders, legends, etc.
+theme_map <- function(base_size=9, base_family="") { # 3
+	require(grid)
+	theme_bw(base_size=base_size, base_family=base_family) %+replace%
+		theme(axis.line=element_blank(),
+			  axis.text=element_blank(),
+			  axis.ticks=element_blank(),
+			  axis.title=element_blank(),
+			  panel.background=element_blank(),
+			  panel.border=element_blank(),
+			  panel.grid=element_blank(),
+			  panel.spacing=unit(0, "lines"),
+			  plot.background=element_blank(),
+			  legend.justification = c(0,0),
+			  legend.position = c(0,0)
+		)
+}
+
+# Define the filling colors for each province; max allowed is 9 but good enough for the 13 provinces + territories
+map_colors <- RColorBrewer::brewer.pal(9, "Pastel1") %>% rep(37) # 4
+```
+
+# Plotting Canada
+```{r}
+# Plot the map
+ggplot() +
+  geom_sf(data = canada_cd, color = "gray60", size = 0.1) +
+  coord_sf(default_crs = NULL) +
+	scale_fill_manual(values = map_colors) +
+	guides(fill = "none") +
+	theme_map() + 
+  theme(panel.grid.major = element_line(color = "white"),
+        legend.key = element_rect(color = "gray40", size = 0.1))
+```
+
+# Trying to figure out how to crop the map. 
+```{r}
+# QGIS plots my Canada data in NAD83/ Statistics Canada Lambert EPSG: 3357
+#st_set_crs(canada_cd, 3347)
+
+#Create bbox object to use with st_crop().
+bbox <- st_bbox(crop_cd[[2]][[1]]) # turn xmin,xmax,ymin,ymax from crop into bbox
+bbox <- st_set_crs(bbox, crs_string) # set crs of bbox 
+st_crs(bbox) # check that the crs set
+
+st_crop(canada_cd_t, bbox) #Error in FUN(X[[i]], ...) : !anyNA(x) is not TRUE
+#c(-1585578.9, 4009743.7, 724394.2, 5221468.4)
+
+st_is_valid(canada_cd_t) #checked this after getting !anyNA(x) not TRUE; saw that this produces some FALSE values
+canada_cd_t <- st_make_valid(canada_cd_t) #attempt to fix FALSE values, it does. 
+st_is_valid(canada_cd_t) #now they are all true. try running line 123 again and get the same !anyNA(x) error. 
+
+```
+
+# Since all cropping attemps have failed, here is a filtered dataset of the two provinces I care about. :)
+# Not ideal since I still can't zoom in on specific areas I care about, but better than looking at all of Southern Canada.
+```{r}
+nwt_cd <- canada_cd_t %>%
+  filter(PRNAME == "Northwest Territories / Territoires du Nord-Ouest" | PRNAME == "Nunavut") #%>% filter(!CDNAME == "Baffin")
+```
+
+# Kimberlite Data
+```{r}
+pipe_coords_raw <- readxl::read_excel("data/kimberlite_coords.xlsx") %>%
+  drop_na(long) #read in data I want to plot on the map
+
+pipe_coords <- st_as_sf(pipe_coords_raw, 
+                     coords = c("long", "lat"), 
+                     remove = FALSE, 
+                     crs = 4269, 
+                     agr = "constant") #transform pipe_coords_raw so they plot correctly on the map
+```
+
+#Plot with Kimberlite Data
+```{r}
+ggplot() +
+  geom_sf(data = pipe_coords, aes(color = age_Ma), alpha = 1, size = 1) + # 
+	geom_sf(data = nwt_cd, color = "gray60", fill = "lightblue", size = 0.1, alpha = 0.3) +
+	coord_sf(default_crs = NULL) +
+	guides(fill = "none") +
+  theme_map() + 
+  theme(panel.grid.major = element_line(color = "white"),
+  legend.key = element_rect(color = "gray40", size = 0.1))
+```
+
+
+
+
+
+
+
+
+
+
+
+
